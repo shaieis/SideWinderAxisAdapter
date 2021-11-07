@@ -1,16 +1,17 @@
 import os
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
 import vgamepad
 import time
 
-WHEEL_DISCONNECTED = 1
-PYGAME_QUIT = 2
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # workaround to hide pygame prompt. should stay before pygame import
+import pygame
+
+# the sctipt detects the SideWinder wheel by searching the following substring:
+SIDEWINDER_NAME_SUBSTR = "SideWinder Precision Racing Wheel"
 
 # button mapping maps keys 0 to 7 of the sidewinder wheel to the virtual XBox360 buttons. all possible buttons are
 # located in vgamepad
 
-button_map = [vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_A,
+BUTTON_MAP = [vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_A,
               vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_B,
               vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_X,
               vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_Y,
@@ -19,7 +20,14 @@ button_map = [vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_A,
               vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_START,
               vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_BACK]
 
+# axis values:
+STEERING_AXIS = 0
+GAS_PEDAL_AXIS = 1
+BRAKE_PEDAL_AXIS = 2
 
+# return values
+WHEEL_DISCONNECTED = 1
+PYGAME_QUIT = 2
 # ============================ initialization of gamepad and wheel ============================
 
 def init_virtual_gamepad():
@@ -29,13 +37,14 @@ def init_virtual_gamepad():
 def find_sidewinder(device_index):
     pygame.joystick.init()
     joystick = pygame.joystick.Joystick(device_index)
-    if "SideWinder Precision Racing Wheel" in pygame.joystick.Joystick(device_index).get_name():
+    if SIDEWINDER_NAME_SUBSTR in joystick.get_name():
         return joystick
 
     return None
 
 
 def wait_for_sidewinder():
+    # when pygame starts running it issues a JOYDEVICEADDED event for each connected joystick
     while True:
         event = pygame.event.wait()
         if event.type == pygame.JOYDEVICEADDED:
@@ -47,17 +56,11 @@ def wait_for_sidewinder():
 # ============================ handle buttons and axis ============================
 
 def handle_button(event, virtual_gp):
-    # mapping sidewinder to xbox360
-    button_map = [vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_A,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_B,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_X,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_Y,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_RIGHT_THUMB,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_START,
-                  vgamepad.XUSB_BUTTON.XUSB_GAMEPAD_BACK]
+    if event.button >= len(BUTTON_MAP):
+        print("Button " + event.button + " out of range")
+        return
 
-    button = button_map[event.button]
+    button = BUTTON_MAP[event.button]  # mapping sidewinder to xbox360
 
     if event.type == pygame.JOYBUTTONUP:
         virtual_gp.release_button(button)
@@ -68,10 +71,12 @@ def handle_button(event, virtual_gp):
 
 
 def handle_axis(joystick, virtual_gp):
-    steering = joystick.get_axis(0)
-    gas_pedal = joystick.get_axis(1)
-    brake_pedal = joystick.get_axis(2)
+    steering = joystick.get_axis(STEERING_AXIS)
+    gas_pedal = joystick.get_axis(GAS_PEDAL_AXIS)
+    brake_pedal = joystick.get_axis(BRAKE_PEDAL_AXIS)
 
+    # gas pedal axis values: not pressed (1.0) to pressed (-1.0)
+    # brake pedal axis values: not pressed (1.0) to pressed (-1.0)
     y = (brake_pedal - gas_pedal) / 2
 
     virtual_gp.left_joystick_float(x_value_float=steering, y_value_float=y)
@@ -111,7 +116,7 @@ def main():
     ret_val = WHEEL_DISCONNECTED
     while ret_val is WHEEL_DISCONNECTED:
         print("Searching for a SideWinder wheel...")
-        sidewinder = wait_for_sidewinder()
+        sidewinder = wait_for_sidewinder()  # this also detects all joysticks that are already connected when the script starts
         print("SideWinder found!")
         ret_val = main_loop(sidewinder, virtual_gp)
 
